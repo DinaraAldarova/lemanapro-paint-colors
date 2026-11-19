@@ -20,10 +20,12 @@
         <input id="catalogAFile" type="file" accept=".json,application/json" hidden>
         <button class="button button-light" id="loadCButton" type="button">Загрузить каталог C</button>
         <input id="catalogCFile" type="file" accept=".json,application/json" hidden>
+        <button class="button button-light" id="toggleLinksPanel" type="button" aria-expanded="false">Настроить ссылки</button>
+        <button class="button button-light" id="toggleColorSearch" type="button" aria-expanded="false">Поиск по цветовому кругу</button>
       </div>
     </header>
 
-    <section class="link-settings">
+    <section class="link-settings" id="linkSettings" hidden>
       <div class="link-settings-title">
         <div><h2>Ссылки на краску</h2><p>Вставьте ссылку на товар с подходящим типом основы. ID цвета будет добавлен к ссылке.</p></div>
         <button id="saveLinks" class="button button-dark" type="button">Сохранить ссылки</button>
@@ -54,19 +56,36 @@
       <label class="search-label">Поиск цвета<input id="search" type="search" placeholder="Название, HEX или ID" disabled></label>
       <label>Сортировка
         <select id="sort" disabled>
-          <option value="rgb">RGB: R → G → B</option>
+          <option value="rgb">RGB</option>
           <option value="brightness">Яркость</option>
           <option value="hue">Оттенок (hue)</option>
           <option value="saturation">Насыщенность</option>
           <option value="name">Название цвета</option>
           <option value="palette">Название палитры</option>
-          <option value="similarity">Похожесть на выбранный цвет</option>
+        </select>
+      </label>
+      <label id="rgbPrimaryControl">Сначала канал
+        <select id="rgbPrimary" disabled>
+          <option value="RGB">R → G → B</option>
+          <option value="RBG">R → B → G</option>
+          <option value="GBR">G → B → R</option>
+          <option value="GRB">G → R → B</option>
+          <option value="BRG">B → R → G</option>
+          <option value="BGR">B → G → R</option>
+        </select>
+      </label>
+      <label id="rgbStepControl">Округление RGB
+        <select id="rgbStep" disabled>
+          <option value="1">Без округления</option>
+          <option value="5">Шаг 5</option>
+          <option value="10" selected>Шаг 10</option>
+          <option value="20">Шаг 20</option>
         </select>
       </label>
       <button id="sortDirection" class="button button-light" type="button" disabled>По возрастанию ↑</button>
     </section>
 
-    <section class="color-search" aria-label="Поиск цвета по образцу">
+    <section class="color-search" id="colorSearchPanel" aria-label="Поиск цвета по образцу" hidden>
       <div class="color-search-copy"><h2>Найти похожие на заданный цвет</h2><p>Введите HEX или RGB-код либо выберите цвет в палитре браузера.</p></div>
       <input id="referencePicker" type="color" value="#FF00AA" aria-label="Открыть цветовой круг">
       <input id="referenceText" type="text" value="#FF00AA" placeholder="#FF00AA или rgb(255, 0, 170)" aria-label="HEX или RGB">

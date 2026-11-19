@@ -1,5 +1,5 @@
 // Run in DevTools Console on perm.lemanapro.ru.
-// One SECRET → get_styles palette list → get-colors per palette → one catalog JSON.
+// One SECRET → init palette list → get-colors per palette → one catalog JSON.
 (() => {
   const endpoint = 'https://core.robotint.net/exchange/';
   if (!location.hostname.endsWith('lemanapro.ru')) {
@@ -15,12 +15,12 @@
   panel.style.cssText = 'position:fixed;z-index:2147483647;right:16px;bottom:16px;width:min(430px,calc(100vw - 32px));padding:18px;background:#fff;color:#222;border:1px solid #aaa;border-radius:10px;box-shadow:0 8px 30px #0004;font:14px/1.45 Arial,sans-serif';
   panel.innerHTML = `
     <strong style="display:block;font-size:16px;margin-bottom:8px">Обновление каталога цветов</strong>
-    <div style="font-size:12px;color:#555">Выберите основу. Сценарий получит палитры, загрузит цвета каждой и скачает файл для выбранной основы.</div>
+    <div style="font-size:12px;color:#555">Выберите основу. Сценарий запросит HTML виджета и список палитр, загрузит цвета каждой и скачает файл для выбранной основы.</div>
     <label style="display:block;margin:10px 0 7px">Тип основы
       <select data-type style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:8px"><option value="A">A — белая, пастельные оттенки</option><option value="C">C — прозрачная, яркие оттенки</option></select>
     </label>
-    <label style="display:block;margin:7px 0">BARCODE из запроса get-colors для товара этой основы
-      <input data-barcode value="4680012021659" inputmode="numeric" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:8px">
+    <label style="display:block;margin:7px 0">BARCODE из тела запроса init для товара этой основы
+      <input data-barcode placeholder="Например, 4690364004132" inputmode="numeric" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:8px">
     </label>
     <label style="display:block;margin:12px 0 8px">SECRET из Request URL запроса get_styles в Network
       <input data-secret type="password" autocomplete="off" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:8px">
@@ -36,7 +36,10 @@
   const button = panel.querySelector('[data-run]');
   panel.querySelector('[data-type]').addEventListener('change', event => {
     const barcode = panel.querySelector('[data-barcode]');
-    barcode.value = event.target.value === 'A' ? '4680012021659' : '';
+    barcode.value = '';
+    barcode.placeholder = event.target.value === 'A'
+      ? 'Введите BARCODE для товара с основой A'
+      : 'Введите BARCODE для товара с основой C';
   });
   panel.querySelector('[data-close]').addEventListener('click', () => panel.remove());
   const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -99,13 +102,20 @@
     button.disabled = true;
     panel.querySelector('[data-secret]').value = '';
     const params = new URLSearchParams({
-      action: 'get_styles', CLIENT_ID: '76', SECRET: secret,
+      action: 'init', stylesInited: '1', BARCODE: barcode, CLIENT_ID: '76', SECRET: secret,
       WITH_PRICE: '1', USE_SWITCHER: '0', USER_ID: '00093264A9', version: '1.7.4'
     });
     let palettes = [];
     try {
-      status.textContent = 'Запрашиваю список палитр (get_styles)…';
-      const stylesText = await request(`${endpoint}?${params}`);
+      status.textContent = 'Запрашиваю виджет и список палитр (init)…';
+      const stylesText = await request(endpoint, {
+        method: 'POST',
+        headers: {
+          accept: '*/*',
+          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: params
+      });
       const seen = new Set();
       parsePaletteHtml(stylesText, palettes, seen);
       try {
@@ -129,12 +139,12 @@
         };
         visit(JSON.parse(stylesText));
       } catch {
-        // get_styles may return an HTML fragment rather than JSON.
+        // init may return HTML or JSON containing the HTML fragment.
       }
-      if (!palettes.length) throw new Error('Не удалось распознать список палитр в get_styles. Проверьте Network → Response.');
+      if (!palettes.length) throw new Error('В HTML-ответе init не найден список палитр. Проверьте Network → Response.');
     } catch (error) {
       status.textContent = `Не удалось получить палитры: ${error.message}`;
-      console.error('get_styles:', error);
+      console.error('init:', error);
       button.disabled = false;
       return;
     }
@@ -188,5 +198,5 @@
     button.disabled = false;
   });
 
-  console.log('Панель обновления добавлена. Введите SECRET из get_styles и нажмите «Обновить каталог».');
+  console.log('Панель обновления добавлена. Введите SECRET из Request URL get_styles и нажмите «Обновить каталог».');
 })();

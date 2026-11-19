@@ -17,6 +17,9 @@ let activeType = 'all';
 let currentView = 'all';
 let sortDirection = 1;
 let manualReference = null;
+let manualDisplayColors = [];
+let manualLoadedCount = 0;
+let manualPool = null;
 let paletteOptions = [];
 
 function setStatus(message, kind = '') {
@@ -173,16 +176,20 @@ function compareColors(a, b) {
     case 'saturation': return (hsl(a.hex).saturation - hsl(b.hex).saturation) * multiplier;
     case 'name': return a.name.localeCompare(b.name, 'ru') * multiplier;
     case 'palette': return (a.paletteName.localeCompare(b.paletteName, 'ru') || a.name.localeCompare(b.name, 'ru')) * multiplier;
-    case 'similarity':
-      if (manualReference) return (colorDistance(a.hex, manualReference) - colorDistance(b.hex, manualReference)) * multiplier;
-      return 0;
     default: {
       const x = rgbChannels(a.hex), y = rgbChannels(b.hex);
-      return ((x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2])) * multiplier;
+      const step = Number(document.querySelector('#rgbStep').value) || 1;
+      const order = { RGB: [0, 1, 2], RBG: [0, 2, 1], GRB: [1, 0, 2], GBR: [1, 2, 0], BRG: [2, 0, 1], BGR: [2, 1, 0] }[document.querySelector('#rgbPrimary').value] || [0, 1, 2];
+      for (const channel of order) {
+        const xRounded = Math.round(x[channel] / step);
+        const yRounded = Math.round(y[channel] / step);
+        if (xRounded !== yRounded) return (xRounded - yRounded) * multiplier;
+      }
+      return 0;
     }
   }
 }
-function matchingColors() {
+function filteredColors() {
   const paletteValue = paletteFilter.value;
   const query = searchInput.value.trim().toLocaleLowerCase('ru');
   return getSourceList().filter(color => {
@@ -190,7 +197,33 @@ function matchingColors() {
     if (paletteValue && `${color.baseType}|${color.paletteId}` !== paletteValue) return false;
     if (query && !`${color.name} ${color.hex} ${color.id} ${color.paletteName}`.toLocaleLowerCase('ru').includes(query)) return false;
     return true;
-  }).sort(compareColors);
+  });
+}
+function resetDisplayedResults() {
+  visibleLimit = PAGE_SIZE;
+  selectedKey = null;
+  manualDisplayColors = [];
+  manualLoadedCount = 0;
+  manualPool = manualReference
+    ? filteredColors().map(color => ({ color, distance: colorDistance(color.hex, manualReference) }))
+      .sort((a, b) => a.distance - b.distance).map(item => item.color)
+    : null;
+  if (manualReference) appendManualPage();
+  else render();
+}
+function appendManualPage() {
+  if (!manualPool) manualPool = filteredColors()
+    .map(color => ({ color, distance: colorDistance(color.hex, manualReference) }))
+    .sort((a, b) => a.distance - b.distance)
+    .map(item => item.color);
+  const batch = manualPool.slice(manualLoadedCount, manualLoadedCount + PAGE_SIZE).sort(compareColors);
+  manualDisplayColors.push(...batch);
+  manualLoadedCount += batch.length;
+  render();
+}
+function applyCurrentSort() {
+  if (manualReference) manualDisplayColors.sort(compareColors);
+  render();
 }
 function getSimilar(color) {
   return colors.filter(other => other.baseType === color.baseType && colorKey(other) !== colorKey(color))
@@ -205,7 +238,7 @@ function toggleFavorite(color) {
   else addFavoriteRecord(color);
   persistFavorites();
   if (currentView === 'favorites') populatePaletteFilter();
-  render();
+  resetDisplayedResults();
 }
 function makeCard(color) {
   const card = document.createElement('article');
@@ -302,8 +335,8 @@ function makeCard(color) {
   return card;
 }
 function render() {
-  const matches = matchingColors();
-  const shown = matches.slice(0, visibleLimit);
+  const matches = filteredColors();
+  const shown = manualReference ? manualDisplayColors : [...matches].sort(compareColors).slice(0, visibleLimit);
   grid.replaceChildren();
   if (!shown.length) {
     const empty = document.createElement('div');
@@ -318,35 +351,53 @@ function render() {
   const favoriteCount = document.querySelector('#favoriteCount');
   favoriteCount.textContent = favorites.size.toLocaleString('ru-RU');
   document.querySelector('#summary').textContent = `${colors.length.toLocaleString('ru-RU')} цветов · A: ${(catalogs.A?.colors.length || 0).toLocaleString('ru-RU')} · C: ${(catalogs.C?.colors.length || 0).toLocaleString('ru-RU')}`;
-  document.querySelector('#resultCount').textContent = `Показано ${shown.length.toLocaleString('ru-RU')} из ${matches.length.toLocaleString('ru-RU')}`;
-  document.querySelector('#showMore').hidden = shown.length >= matches.length;
-  document.querySelector('#showMore').textContent = `Показать ещё ${Math.min(PAGE_SIZE, matches.length - shown.length).toLocaleString('ru-RU')}`;
+  const loaded = manualReference ? manualLoadedCount : shown.length;
+  document.querySelector('#resultCount').textContent = manualReference
+    ? `Показано ${loaded.toLocaleString('ru-RU')} ближайших из ${matches.length.toLocaleString('ru-RU')}`
+    : `Показано ${shown.length.toLocaleString('ru-RU')} из ${matches.length.toLocaleString('ru-RU')}`;
+  const hasMore = manualReference ? manualLoadedCount < matches.length : shown.length < matches.length;
+  document.querySelector('#showMore').hidden = !hasMore;
+  document.querySelector('#showMore').textContent = `Показать ещё ${Math.min(PAGE_SIZE, matches.length - loaded).toLocaleString('ru-RU')}`;
   document.querySelector('#favoriteTools').hidden = currentView !== 'favorites';
   document.querySelector('#openFavorites').hidden = currentView !== 'favorites' || matches.length === 0;
   document.querySelector('#viewAll').classList.toggle('active', currentView === 'all');
   document.querySelector('#viewFavorites').classList.toggle('active', currentView === 'favorites');
   document.querySelector('#sortDirection').textContent = sortDirection === 1 ? 'По возрастанию ↑' : 'По убыванию ↓';
+  document.querySelector('#clearSimilar').disabled = !manualReference;
+  document.querySelector('#clearSimilar').classList.toggle('reset-ready', Boolean(manualReference));
+  document.querySelector('#rgbPrimaryControl').hidden = sortSelect.value !== 'rgb';
+  document.querySelector('#rgbStepControl').hidden = sortSelect.value !== 'rgb';
+  syncPanelButtons();
+}
+function syncPanelButtons() {
+  const linksButton = document.querySelector('#toggleLinksPanel');
+  const colorButton = document.querySelector('#toggleColorSearch');
+  const linksOpen = !document.querySelector('#linkSettings').hidden;
+  const colorOpen = !document.querySelector('#colorSearchPanel').hidden;
+  linksButton.setAttribute('aria-expanded', String(linksOpen));
+  colorButton.setAttribute('aria-expanded', String(colorOpen));
+  linksButton.textContent = linksOpen ? 'Скрыть настройки ссылок' : 'Настроить ссылки';
+  colorButton.textContent = colorOpen ? 'Скрыть цветовой поиск' : (manualReference ? 'Цвет задан · открыть поиск' : 'Поиск по цветовому кругу');
+  colorButton.classList.toggle('panel-active', Boolean(manualReference));
 }
 function switchType(type) {
   activeType = type;
   document.querySelectorAll('#typeTabs [data-type]').forEach(button => button.classList.toggle('active', button.dataset.type === type));
   paletteFilter.value = '';
   selectedKey = null;
-  visibleLimit = PAGE_SIZE;
   populatePaletteFilter();
-  render();
+  resetDisplayedResults();
 }
 function switchView(view) {
   currentView = view;
   selectedKey = null;
-  visibleLimit = PAGE_SIZE;
   paletteFilter.value = '';
   populatePaletteFilter();
-  render();
+  resetDisplayedResults();
 }
 function loadCatalog(type, data, label) {
   catalogs[type] = normalizeCatalog(data, type);
-  for (const control of [paletteFilter, searchInput, sortSelect, document.querySelector('#sortDirection'), document.querySelector('#findSimilar'), document.querySelector('#clearSimilar')]) control.disabled = false;
+  for (const control of [paletteFilter, searchInput, sortSelect, document.querySelector('#rgbPrimary'), document.querySelector('#rgbStep'), document.querySelector('#sortDirection'), document.querySelector('#findSimilar')]) control.disabled = false;
   refreshStatusWithLabel(label);
   rebuildColors();
 }
@@ -356,7 +407,7 @@ function refreshStatusWithLabel(label) {
 function rebuildColors() {
   colors = ['A', 'C'].flatMap(type => catalogs[type]?.colors || []);
   populatePaletteFilter();
-  render();
+  resetDisplayedResults();
   const counts = ['A', 'C'].map(type => `${type}: ${(catalogs[type]?.colors.length || 0).toLocaleString('ru-RU')}`).join(' · ');
   const incomplete = ['A', 'C'].filter(type => catalogs[type] && !catalogs[type].complete && (catalogs[type].palettes.length || catalogs[type].errors.length));
   const empty = ['A', 'C'].filter(type => !catalogs[type] || catalogs[type].colors.length === 0);
@@ -409,11 +460,26 @@ document.querySelector('#catalogCFile').addEventListener('change', event => { if
 document.querySelectorAll('#typeTabs [data-type]').forEach(button => button.addEventListener('click', () => switchType(button.dataset.type)));
 document.querySelector('#viewAll').addEventListener('click', () => switchView('all'));
 document.querySelector('#viewFavorites').addEventListener('click', () => switchView('favorites'));
-paletteFilter.addEventListener('change', () => { visibleLimit = PAGE_SIZE; selectedKey = null; render(); });
-searchInput.addEventListener('input', () => { visibleLimit = PAGE_SIZE; selectedKey = null; render(); });
-sortSelect.addEventListener('change', () => { visibleLimit = PAGE_SIZE; render(); });
-document.querySelector('#sortDirection').addEventListener('click', () => { sortDirection *= -1; render(); });
-document.querySelector('#showMore').addEventListener('click', () => { visibleLimit += PAGE_SIZE; render(); });
+paletteFilter.addEventListener('change', () => resetDisplayedResults());
+searchInput.addEventListener('input', () => resetDisplayedResults());
+sortSelect.addEventListener('change', () => applyCurrentSort());
+document.querySelector('#rgbPrimary').addEventListener('change', () => applyCurrentSort());
+document.querySelector('#rgbStep').addEventListener('change', () => applyCurrentSort());
+document.querySelector('#sortDirection').addEventListener('click', () => { sortDirection *= -1; applyCurrentSort(); });
+document.querySelector('#showMore').addEventListener('click', () => {
+  if (manualReference) appendManualPage();
+  else { visibleLimit += PAGE_SIZE; render(); }
+});
+document.querySelector('#toggleLinksPanel').addEventListener('click', () => {
+  const panel = document.querySelector('#linkSettings');
+  panel.hidden = !panel.hidden;
+  syncPanelButtons();
+});
+document.querySelector('#toggleColorSearch').addEventListener('click', () => {
+  const panel = document.querySelector('#colorSearchPanel');
+  panel.hidden = !panel.hidden;
+  syncPanelButtons();
+});
 document.querySelector('#saveLinks').addEventListener('click', () => {
   const a = document.querySelector('#linkA').value.trim();
   const c = document.querySelector('#linkC').value.trim();
@@ -433,17 +499,20 @@ document.querySelector('#findSimilar').addEventListener('click', () => {
   manualReference = hex;
   document.querySelector('#referenceText').value = hex;
   document.querySelector('#referencePicker').value = hex;
-  sortSelect.value = 'similarity';
+  document.querySelector('#colorSearchPanel').hidden = false;
+  sortSelect.value = 'rgb';
   sortDirection = 1;
-  visibleLimit = PAGE_SIZE;
-  setStatus(`Показываю цвета, ближайшие к ${hex}, по расстоянию в OKLab.`, 'success');
-  render();
+  setStatus(`Ищу ближайшие к ${hex} оттенки в OKLab; внутри каждой порции применяю сортировку RGB.`, 'success');
+  resetDisplayedResults();
 });
 document.querySelector('#clearSimilar').addEventListener('click', () => {
   manualReference = null;
-  sortSelect.value = 'rgb';
-  sortDirection = 1;
   visibleLimit = PAGE_SIZE;
+  manualDisplayColors = [];
+  manualLoadedCount = 0;
+  manualPool = null;
+  document.querySelector('#referencePicker').value = '#FF00AA';
+  document.querySelector('#referenceText').value = '#FF00AA';
   setStatus('Поиск похожего цвета сброшен.');
   render();
 });
@@ -461,12 +530,12 @@ document.querySelector('#importFavoritesFile').addEventListener('change', async 
     list.forEach(addFavoriteRecord);
     persistFavorites();
     populatePaletteFilter();
-    render();
+    resetDisplayedResults();
     setStatus(`Список «${file.name}» добавлен в избранное. Записей: ${list.length}.`, 'success');
   } catch (error) { setStatus(`Не удалось загрузить избранное: ${error.message}`, 'error'); }
 });
 document.querySelector('#openFavorites').addEventListener('click', () => {
-  const matches = matchingColors();
+  const matches = filteredColors();
   if (!matches.length) return;
   if (!window.confirm(`Открыть ${matches.length.toLocaleString('ru-RU')} ссылок из избранного в новых вкладках?`)) return;
   matches.forEach(color => { const url = colorUrl(color); if (url) window.open(url, '_blank', 'noopener,noreferrer'); });
