@@ -4,32 +4,91 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f3ef">
-  <title>Каталог цветов</title>
+  <title>Каталог колеровки Лемана ПРО</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Локальная коллекция</p>
-        <h1>Каталог цветов</h1>
+        <p class="eyebrow">Подбор оттенков краски</p>
+        <h1>Каталог колеровки</h1>
+        <p class="subtitle">Цветовые палитры для колеровки краски в Лемана ПРО</p>
       </div>
-      <button class="button button-dark" id="openAll">Открыть все цвета ↗</button>
+      <div class="header-actions">
+        <button class="button button-light" id="loadAButton" type="button">Загрузить каталог A</button>
+        <input id="catalogAFile" type="file" accept=".json,application/json" hidden>
+        <button class="button button-light" id="loadCButton" type="button">Загрузить каталог C</button>
+        <input id="catalogCFile" type="file" accept=".json,application/json" hidden>
+      </div>
     </header>
 
-    <section class="intro">
-      <div><span class="intro-mark">●</span><span id="summary">Цвета из всех палитр</span></div>
-      <label class="sort-control">Сортировка
-        <select id="sort">
-          <option value="rgb">По RGB: R → G → B</option>
-          <option value="name">По названию</option>
-          <option value="palette">По палитре</option>
-        </select>
-      </label>
+    <section class="link-settings">
+      <div class="link-settings-title">
+        <div><h2>Ссылки на краску</h2><p>Вставьте ссылку на товар с подходящим типом основы. ID цвета будет добавлен к ссылке.</p></div>
+        <button id="saveLinks" class="button button-dark" type="button">Сохранить ссылки</button>
+      </div>
+      <div class="link-grid">
+        <label><span><b>Основа A</b><small>Белая основа для пастельных цветов</small></span><input id="linkA" type="url" placeholder="Вставьте ссылку на краску с основой A"></label>
+        <label><span><b>Основа C</b><small>Прозрачная основа для ярких цветов</small></span><input id="linkC" type="url" placeholder="Вставьте ссылку на краску с основой C"></label>
+      </div>
+      <p class="link-note">Выберите тип основы в переключателе ниже — цвет и ссылка на товар будут соответствовать ему.</p>
     </section>
 
-    <div id="groups" class="groups"></div>
-    <footer>Нажмите на цвет, чтобы открыть его страницу. Данные хранятся в <code>colors.json</code>.</footer>
+    <section class="catalog-bar" aria-label="Тип основы и список">
+      <div class="segmented" id="typeTabs" aria-label="Тип основы">
+        <button type="button" class="active" data-type="all">Все типы</button>
+        <button type="button" data-type="A">Основа A</button>
+        <button type="button" data-type="C">Основа C</button>
+      </div>
+      <div class="segmented view-tabs" aria-label="Список цветов">
+        <button type="button" class="active" id="viewAll">Все цвета</button>
+        <button type="button" id="viewFavorites">Избранное <span id="favoriteCount">0</span></button>
+      </div>
+    </section>
+
+    <div id="status" class="status" role="status">Загружаю каталоги…</div>
+
+    <section class="toolbar" aria-label="Поиск и сортировка">
+      <label>Палитра<select id="paletteFilter" disabled><option value="">Все палитры</option></select></label>
+      <label class="search-label">Поиск цвета<input id="search" type="search" placeholder="Название, HEX или ID" disabled></label>
+      <label>Сортировка
+        <select id="sort" disabled>
+          <option value="rgb">RGB: R → G → B</option>
+          <option value="brightness">Яркость</option>
+          <option value="hue">Оттенок (hue)</option>
+          <option value="saturation">Насыщенность</option>
+          <option value="name">Название цвета</option>
+          <option value="palette">Название палитры</option>
+          <option value="similarity">Похожесть на выбранный цвет</option>
+        </select>
+      </label>
+      <button id="sortDirection" class="button button-light" type="button" disabled>По возрастанию ↑</button>
+    </section>
+
+    <section class="color-search" aria-label="Поиск цвета по образцу">
+      <div class="color-search-copy"><h2>Найти похожие на заданный цвет</h2><p>Введите HEX или RGB-код либо выберите цвет в палитре браузера.</p></div>
+      <input id="referencePicker" type="color" value="#FF00AA" aria-label="Открыть цветовой круг">
+      <input id="referenceText" type="text" value="#FF00AA" placeholder="#FF00AA или rgb(255, 0, 170)" aria-label="HEX или RGB">
+      <button id="findSimilar" class="button button-dark" type="button" disabled>Найти</button>
+      <button id="clearSimilar" class="button button-light" type="button" disabled>Сбросить</button>
+    </section>
+
+    <section id="favoriteTools" class="favorite-tools" hidden>
+      <div><b>Избранное</b><small>Скачайте список, чтобы сохранить свою копию. Сайт не гарантирует его сохранность.</small></div>
+      <div class="favorite-actions">
+        <button id="downloadFavoritesJson" class="button button-light" type="button">Скачать JSON</button>
+        <button id="downloadFavoritesTxt" class="button button-light" type="button">Скачать TXT</button>
+        <button id="importFavoritesButton" class="button button-light" type="button">Загрузить список</button>
+        <input id="importFavoritesFile" type="file" accept=".json,application/json" hidden>
+        <button id="openFavorites" class="button button-dark" type="button" hidden>Открыть все результаты ↗</button>
+      </div>
+    </section>
+
+    <section class="results-head"><div id="summary">Каталоги не загружены</div><div id="resultCount"></div></section>
+    <div id="colorGrid" class="color-grid"></div>
+    <div class="more-wrap"><button id="showMore" class="button button-light" type="button" hidden>Показать ещё</button></div>
+    <footer>Выберите квадрат, чтобы увидеть похожие оттенки. В карточке цвета можно открыть товар и добавить цвет в избранное.</footer>
   </main>
   <script src="app.js"></script>
 </body>
