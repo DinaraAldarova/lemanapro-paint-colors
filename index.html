@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3ef">
+  <title>Каталог цветов</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Локальная коллекция</p>
+        <h1>Каталог цветов</h1>
+      </div>
+      <button class="button button-dark" id="openAll">Открыть все цвета ↗</button>
+    </header>
+
+    <section class="intro">
+      <div><span class="intro-mark">●</span><span id="summary">Цвета из всех палитр</span></div>
+      <label class="sort-control">Сортировка
+        <select id="sort">
+          <option value="rgb">По RGB: R → G → B</option>
+          <option value="name">По названию</option>
+          <option value="palette">По палитре</option>
+        </select>
+      </label>
+    </section>
+
+    <div id="groups" class="groups"></div>
+    <footer>Нажмите на цвет, чтобы открыть его страницу. Данные хранятся в <code>colors.json</code>.</footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
